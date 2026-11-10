@@ -1,0 +1,48 @@
+defaults:
+  - model: conv_tasnet
+  - writer: separation_cometml
+  - metrics: separation
+  - datasets: separation
+  - dataloader: example
+  - _self_
+
+data_dir: dla_dataset
+sample_rate: 16000
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 0.001
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  mode: max
+  factor: 0.5
+  patience: 3
+  threshold_mode: abs
+  threshold: 0.01
+loss_function:
+  _target_: src.loss.PITSISNRLoss
+transforms:
+  batch_transforms:
+    train: null
+    inference: null
+trainer:
+  n_epochs: 100
+  epoch_len: null
+  device: auto
+  device_tensors: [mix, targets]
+  seed: 42
+  log_step: 50
+  audio_examples: 2
+  use_amp: true
+  max_grad_norm: 5.0
+  skip_oom: false
+  lr_scheduler_metric: val_SI-SNRi
+  monitor: "max val_SI-SNRi"
+  early_stop: 10
+  save_period: 5
+  save_dir: saved
+  resume_from: null
+  from_pretrained: null
+  override: false
+hydra:
+  job:
+    chdir: false

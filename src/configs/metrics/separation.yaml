@@ -1,0 +1,8 @@
+train:
+  - _target_: src.metrics.separation.SISNRiMetric
+    name: SI-SNRi
+inference:
+  - _target_: src.metrics.separation.SISNRMetric
+    name: SI-SNR
+  - _target_: src.metrics.separation.SISNRiMetric
+    name: SI-SNRi

@@ -1,0 +1,10 @@
+_target_: src.model.conv_tasnet.ConvTaSNet
+n_filters: 256
+n_speakers: 2
+dilation_factor: 8
+repeat: 4
+b_size: 128
+h_size: 256
+skip_size: 128
+encoder_kernel_size: 32
+tcn_kernel_size: 3
