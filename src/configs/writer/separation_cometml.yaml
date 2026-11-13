@@ -1,0 +1,9 @@
+_target_: src.logger.separation_cometml.SeparationCometMLWriter
+project_name: avss
+workspace: null
+run_name: conv_tasnet
+mode: online
+loss_names: [loss]
+log_checkpoints: false
+id_length: 32
+offline_directory: .cometml-runs

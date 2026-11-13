@@ -1,0 +1,10 @@
+train:
+  _target_: src.datasets.separation_dataset.SeparationDataset
+  dir: ${data_dir}
+  part: train
+  limit: null
+val:
+  _target_: src.datasets.separation_dataset.SeparationDataset
+  dir: ${data_dir}
+  part: val
+  limit: null
