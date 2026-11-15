@@ -121,7 +121,9 @@ class ConvTaSNet(nn.Module):
             video_features=video_features,
         )
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
-        self.video_encoder = VideoEncoder(video_features) if video_features is not None else None
+        self.video_encoder = None
+        if video_features is not None:
+            self.video_encoder = VideoEncoder(video_features)
 
 
     def freeze_audio(self):
@@ -136,7 +138,9 @@ class ConvTaSNet(nn.Module):
         x = F.pad(x, (0, pad))
         
         w = self.encoder(x)
-        video_features = self.video_encoder(video) if video is not None else None
+        video_features = None
+        if video is not None:
+            video_features = self.video_encoder(video)
         masks = self.sep(w, video_features)
         s = masks * w.unsqueeze(1)
 
