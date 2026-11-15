@@ -41,7 +41,10 @@ def main(config):
         for metric_config in config.metrics[metric_type]:
             metrics[metric_type].append(instantiate(metric_config))
 
-    trainable_params = (parameter for parameter in model.parameters() if parameter.requires_grad)
+    trainable_params = []
+    for parameter in model.parameters():
+        if parameter.requires_grad:
+            trainable_params.append(parameter)
     optimizer = instantiate(config.optimizer, params=trainable_params)
     lr_scheduler = instantiate(config.lr_scheduler, optimizer=optimizer)
 

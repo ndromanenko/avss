@@ -125,8 +125,6 @@ class ConvTaSNet(nn.Module):
 
 
     def freeze_audio(self):
-        if self.video_encoder is None:
-            raise ValueError("freeze_audio requires a video encoder")
         self.requires_grad_(False)
         self.video_encoder.requires_grad_(True)
         self.sep.video_projection.requires_grad_(True)
