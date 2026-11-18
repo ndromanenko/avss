@@ -20,6 +20,8 @@ def get_pit(predictions, targets, metric_func):
         eval_func="max",
     )
 
+def get_sisnr(predictions, targets):
+    return get_pit(predictions, targets, scale_invariant_signal_noise_ratio)
 
 class SISNRMetric(BaseMetric):
     @torch.no_grad()

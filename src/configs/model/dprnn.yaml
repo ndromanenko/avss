@@ -1,0 +1,8 @@
+_target_: src.model.dprnn.DualPathRNN
+n_filters: 128
+num_speakers: 2
+hidden_size: 128
+encoder_kernel_size: 16
+num_blocks: 6
+num_layers: 1
+chunk_size: 100
