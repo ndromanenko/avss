@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import soundfile as sf
 import torch
 from torch.utils.data import Dataset
@@ -8,8 +9,11 @@ from src.utils.io_utils import ROOT_PATH
 
 
 class SeparationDataset(Dataset):
-    def __init__(self, dir, part=None, limit=None):
-        self.audio_dir = ROOT_PATH / dir / "audio"
+    def __init__(self, dir, part=None, limit=None, use_video=False):
+        root = ROOT_PATH / dir
+        self.audio_dir = root / "audio"
+        self.mouths_dir = root / "mouths"
+        self.use_video = use_video
         if part is not None:
             self.audio_dir = self.audio_dir / part
 
@@ -27,6 +31,11 @@ class SeparationDataset(Dataset):
         audio, non = sf.read(path, dtype="float32")
         return torch.from_numpy(audio)
 
+    def load_video(self, source_id):
+        name = f"{source_id}.npz"
+        with np.load(self.mouths_dir / name) as clip:
+            return torch.from_numpy(clip["data"])
+
     def __getitem__(self, index):
         path = self.files[index]
         item = {
@@ -38,4 +47,7 @@ class SeparationDataset(Dataset):
             s1 = self.load_audio(self.audio_dir / "s1" / path.name)
             s2 = self.load_audio(self.audio_dir / "s2" / path.name)
             item["targets"] = torch.stack([s1, s2])
+        if self.use_video:
+            first, second = path.stem.split("_")
+            item["video"] = torch.stack([self.load_video(first), self.load_video(second)])
         return item

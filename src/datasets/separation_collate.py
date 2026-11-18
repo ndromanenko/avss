@@ -21,5 +21,7 @@ def collate_fn(dataset_items):
     }
     if targets:
         batch["targets"] = torch.stack(targets)
+    if "video" in dataset_items[0]:
+        batch["video"] = torch.stack([item["video"] for item in dataset_items])
 
     return batch

@@ -31,6 +31,8 @@ def main(config):
 
     dataloaders = get_dataloaders(config)
     model = instantiate(config.model).to(device)
+    if config.trainer.get("freeze_audio", False):
+        model.freeze_audio()
     logger.info(model)
     loss_function = instantiate(config.loss_function).to(device)
 
@@ -39,7 +41,11 @@ def main(config):
         for metric_config in config.metrics[metric_type]:
             metrics[metric_type].append(instantiate(metric_config))
 
-    optimizer = instantiate(config.optimizer, params=model.parameters())
+    trainable_params = []
+    for parameter in model.parameters():
+        if parameter.requires_grad:
+            trainable_params.append(parameter)
+    optimizer = instantiate(config.optimizer, params=trainable_params)
     lr_scheduler = instantiate(config.lr_scheduler, optimizer=optimizer)
 
     trainer = SeparationTrainer(

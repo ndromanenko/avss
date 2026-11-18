@@ -18,7 +18,11 @@ class SeparationTrainer(BaseTrainer):
         device_type = torch.device(self.device).type
         use_amp = self.cfg_trainer.use_amp and device_type == "cuda"
         with torch.autocast(device_type, dtype=torch.bfloat16, enabled=use_amp):
-            batch["predictions"] = self.model(batch["mix"]).float()
+            if "video" in batch:
+                predictions = self.model(batch["mix"], batch["video"])
+            else:
+                predictions = self.model(batch["mix"])
+            batch["predictions"] = predictions.float()
 
         losses = self.criterion(batch["predictions"], batch["targets"])
         batch.update(losses)
@@ -60,6 +64,15 @@ class SeparationTrainer(BaseTrainer):
 
         self.lr_scheduler.step(logs[self.cfg_trainer.lr_scheduler_metric])
         return logs
+
+    def _from_pretrained(self, pretrained_path):
+        if self.config.model.get("video_features") is None:
+            return super()._from_pretrained(pretrained_path)
+
+        self.logger.info(f"Loading model weights from: {pretrained_path}")
+        checkpoint = torch.load(pretrained_path, self.device, weights_only=False)
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        self.model.load_state_dict(state_dict, strict=False)
 
     def _log_batch(self, batch_idx, batch, mode="train"):
         if mode != "train":
