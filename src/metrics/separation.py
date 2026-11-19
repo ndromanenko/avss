@@ -42,11 +42,15 @@ class SISNRiMetric(BaseMetric):
 
 
 class SDRiMetric(BaseMetric):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.metric_func = partial(signal_distortion_ratio, zero_mean=True)
+
     @torch.no_grad()
     def __call__(self, predictions, targets, mix, **batch):
-        scores, _ = get_pit(predictions, targets, signal_distortion_ratio)
+        scores, _ = get_pit(predictions, targets, self.metric_func)
         mixture = mix.unsqueeze(1).expand_as(targets)
-        input_scores = signal_distortion_ratio(mixture, targets)
+        input_scores = self.metric_func(mixture, targets)
         res = (scores - input_scores.mean(dim=1)).mean().item()
         return res
 
