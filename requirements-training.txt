@@ -4,6 +4,8 @@ torchmetrics>=1.4,<2
 numpy>=1.26,<3
 soundfile
 scipy
+pesq>=0.0.4
+pystoi>=0.4.1
 hydra-core
 comet_ml
 pandas

@@ -1,0 +1,22 @@
+defaults:
+  - dprnn
+  - _self_
+
+model:
+  video_features: 32
+datasets:
+  train:
+    use_video: true
+  val:
+    use_video: true
+dataloader:
+  batch_size: 16
+  num_workers: 4
+optimizer:
+  lr: 0.0003
+trainer:
+  freeze_audio: false
+  device_tensors: [mix, targets, video]
+writer:
+  run_name: video_dprnn
+  mode: offline
