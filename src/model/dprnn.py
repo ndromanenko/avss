@@ -1,6 +1,8 @@
 from torch import nn
 import torch.nn.functional as F
 
+from src.model.video_encoder import VideoEncoder
+
 
 class Encoder(nn.Module):
     def __init__(self, n_filters, kernel_size, stride):
@@ -64,7 +66,7 @@ class DPRNNBlock(nn.Module):
 
 
 class ProcessingBlock(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_blocks, chunk_size, num_speakers):
+    def __init__(self, input_size, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features=None):
         super().__init__()
         self.input_size = input_size 
         self.chunk_size = chunk_size
@@ -76,6 +78,9 @@ class ProcessingBlock(nn.Module):
         self.prelu = nn.PReLU()
         self.conv_out = nn.Conv1d(in_channels=input_size, out_channels=num_speakers * input_size, kernel_size=1)
         self.sigma = nn.Sigmoid()
+        if video_features is not None:
+            self.video_projection = nn.Conv1d(num_speakers * video_features, input_size, 1, bias=False)
+            nn.init.zeros_(self.video_projection.weight)
 
     def _segmentation(self, x, chunk_size):
         step_size = chunk_size // 2
@@ -106,9 +111,13 @@ class ProcessingBlock(nn.Module):
 
         return x[..., left_pad:left_pad + original_length]
 
-    def forward(self, x):
+    def forward(self, x, video=None):
         B, _, L = x.shape
-        
+        if video is not None:
+            video = self.video_projection(video)
+            video = F.interpolate(video, size=L, mode="linear", align_corners=False)
+            x = x + video.to(x.dtype)
+
         x_seg = self._segmentation(x, self.chunk_size)
         x_block = x_seg
         for block in self.blocks:
@@ -135,25 +144,36 @@ class Decoder(nn.Module):
 
 
 class DualPathRNN(nn.Module):
-    def __init__(self, n_filters, num_speakers, hidden_size, encoder_kernel_size, num_blocks, num_layers, chunk_size):
+    def __init__(self, n_filters, num_speakers, hidden_size, encoder_kernel_size, num_blocks, num_layers, chunk_size, video_features=None):
         super().__init__()
 
         self.stride = encoder_kernel_size // 2
         self.kernel_size = encoder_kernel_size
 
         self.encoder = Encoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
-        self.separation = ProcessingBlock(n_filters, hidden_size, num_layers, num_blocks, chunk_size, num_speakers)
+        self.separation = ProcessingBlock(n_filters, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features)
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
+        self.video_encoder = None
+        if video_features is not None:
+            self.video_encoder = VideoEncoder(video_features)
 
 
-    def forward(self, x):
+    def freeze_audio(self):
+        self.requires_grad_(False)
+        self.video_encoder.requires_grad_(True)
+        self.separation.video_projection.requires_grad_(True)
+
+    def forward(self, x, video=None):
         
         length = x.shape[-1]
         pad = (self.stride - (length - self.kernel_size) % self.stride) % self.stride
         x = F.pad(x, (0, pad))
         
         w = self.encoder(x)
-        masks = self.separation(w)
+        video_features = None
+        if video is not None:
+            video_features = self.video_encoder(video)
+        masks = self.separation(w, video_features)
         s = masks * w.unsqueeze(1)
 
         B, C, _, _ = s.shape
