@@ -31,6 +31,9 @@ def main(config):
 
     dataloaders = get_dataloaders(config)
     model = instantiate(config.model).to(device)
+    audio_encoder_checkpoint = config.trainer.get("audio_encoder_checkpoint")
+    if audio_encoder_checkpoint is not None:
+        model.load_audio_encoder(audio_encoder_checkpoint)
     if config.trainer.get("freeze_audio", False):
         model.freeze_audio()
     logger.info(model)

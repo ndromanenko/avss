@@ -163,7 +163,7 @@ class DualPathRNN(nn.Module):
         self.video_encoder.requires_grad_(True)
         self.separation.video_projection.requires_grad_(True)
 
-    def forward(self, x, video=None):
+    def forward(self, x, video=None, return_video_features=False):
         
         length = x.shape[-1]
         pad = (self.stride - (length - self.kernel_size) % self.stride) % self.stride
@@ -180,7 +180,10 @@ class DualPathRNN(nn.Module):
         s = s.flatten(0, 1)
         x = self.decoder(s).reshape(B, C, -1)
 
-        return x[..., :length]
+        predictions = x[..., :length]
+        if return_video_features:
+            return predictions, video_features
+        return predictions
 
     def transform_input_lengths(self, input_lengths):
         """
