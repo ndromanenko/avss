@@ -1,0 +1,16 @@
+defaults:
+  - video_conv_tasnet
+  - _self_
+
+model:
+  video_encoder:
+    _target_: src.model.video_vit_encoder.VideoViTEncoder
+    features: ${model.video_features}
+    image_size: 96
+    patch_size: 8
+    hidden_size: 128
+    num_layers: 4
+    num_heads: 4
+    dropout: 0.1
+writer:
+  run_name: vit_conv_tasnet
