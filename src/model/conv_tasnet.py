@@ -102,7 +102,7 @@ class Separation(nn.Module):
 
 
 class ConvTaSNet(nn.Module):
-    def __init__(self, n_filters, n_speakers, dilation_factor, repeat, b_size, h_size, skip_size, encoder_kernel_size, tcn_kernel_size, video_features=None):
+    def __init__(self, n_filters, n_speakers, dilation_factor, repeat, b_size, h_size, skip_size, encoder_kernel_size, tcn_kernel_size, video_features=None, video_encoder=None):
         super().__init__()
 
         self.stride = encoder_kernel_size // 2
@@ -121,8 +121,8 @@ class ConvTaSNet(nn.Module):
             video_features=video_features,
         )
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
-        self.video_encoder = None
-        if video_features is not None:
+        self.video_encoder = video_encoder
+        if self.video_encoder is None and video_features is not None:
             self.video_encoder = VideoEncoder(video_features)
 
 

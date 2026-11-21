@@ -144,7 +144,7 @@ class Decoder(nn.Module):
 
 
 class DualPathRNN(nn.Module):
-    def __init__(self, n_filters, num_speakers, hidden_size, encoder_kernel_size, num_blocks, num_layers, chunk_size, video_features=None):
+    def __init__(self, n_filters, num_speakers, hidden_size, encoder_kernel_size, num_blocks, num_layers, chunk_size, video_features=None, video_encoder=None):
         super().__init__()
 
         self.stride = encoder_kernel_size // 2
@@ -153,8 +153,8 @@ class DualPathRNN(nn.Module):
         self.encoder = Encoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
         self.separation = ProcessingBlock(n_filters, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features)
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
-        self.video_encoder = None
-        if video_features is not None:
+        self.video_encoder = video_encoder
+        if self.video_encoder is None and video_features is not None:
             self.video_encoder = VideoEncoder(video_features)
 
 
