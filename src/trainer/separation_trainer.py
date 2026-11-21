@@ -18,13 +18,16 @@ class SeparationTrainer(BaseTrainer):
         device_type = torch.device(self.device).type
         use_amp = self.cfg_trainer.use_amp and device_type == "cuda"
         with torch.autocast(device_type, dtype=torch.bfloat16, enabled=use_amp):
-            if "video" in batch:
-                predictions = self.model(batch["mix"], batch["video"])
+            if self.cfg_trainer.get("duble_loss", False):
+                outputs = self.model(batch["mix"], batch["video"], batch["targets"])
+                batch.update(outputs)
+            elif "video" in batch:
+                batch["predictions"] = self.model(batch["mix"], batch["video"])
             else:
-                predictions = self.model(batch["mix"])
-            batch["predictions"] = predictions.float()
+                batch["predictions"] = self.model(batch["mix"])
+            batch["predictions"] = batch["predictions"].float()
 
-        losses = self.criterion(batch["predictions"], batch["targets"])
+        losses = self.criterion(**batch)
         batch.update(losses)
 
         if self.is_train:

@@ -4,7 +4,7 @@ from torchmetrics.functional.audio import permutation_invariant_training, scale_
 
 
 class PITSISNRLoss(nn.Module):
-    def forward(self, predictions: Tensor, targets: Tensor) -> Tensor:
+    def forward(self, predictions: Tensor, targets: Tensor, **batch) -> Tensor:
         scores, _ = permutation_invariant_training(
             predictions,
             targets,

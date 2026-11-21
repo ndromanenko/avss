@@ -1,0 +1,18 @@
+defaults:
+  - vit_dprnn
+  - _self_
+
+model:
+  _target_: src.model.dprnn_duble_loss.DubleLossDualPathRNN
+  audio_features: 256
+  audio_kernel_size: 32
+loss_function:
+  _target_: src.loss.duble_loss.DubleLoss
+  lambda_video: 0.1
+  temperature: 0.1
+trainer:
+  duble_loss: true
+  audio_encoder_checkpoint: saved/conv_tasnet_20ep/model_best.pth
+writer:
+  run_name: vit_dprnn_duble_loss
+  loss_names: [loss, audio_loss, ce_loss]
