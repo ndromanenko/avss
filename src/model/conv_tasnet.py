@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 import torch.nn.functional as F
 
@@ -54,11 +55,12 @@ class Conv1DBlock(nn.Module):
         return residual_branch, skip_conn_branch
 
 class Separation(nn.Module):
-    def __init__(self, in_size, b_size, h_size, skip_size, kernel_size, dilation_factor, repeat, num_speakers, video_features=None):
+    def __init__(self, in_size, b_size, h_size, skip_size, kernel_size, dilation_factor, repeat, num_speakers, video_features=None, use_concat=False):
         super().__init__()
 
         self.in_size = in_size
         self.num_speakers = num_speakers
+        self.use_concat = use_concat
         self.gln1 = nn.GroupNorm(num_groups=1, num_channels=in_size, eps=1e-8)
         self.conv_in = nn.Conv1d(in_channels=in_size, out_channels=b_size, kernel_size=1)
         self.prelu1 = nn.PReLU()
@@ -67,12 +69,25 @@ class Separation(nn.Module):
         self.blocks = nn.ModuleList()
         self.video_block = dilation_factor if repeat > 1 else 0
         if video_features is not None:
-            self.video_projection = nn.Conv1d(num_speakers * video_features, b_size, 1, bias=False)
-            nn.init.zeros_(self.video_projection.weight)
+            if use_concat:
+                self.video_projection = nn.Sequential(
+                    nn.Linear(b_size + num_speakers * video_features, b_size),
+                    nn.ReLU(),
+                    nn.Linear(b_size, b_size),
+                )
+            else:
+                self.video_projection = nn.Linear(num_speakers * video_features, b_size, bias=False)
+                nn.init.zeros_(self.video_projection.weight)
 
         for _ in range(repeat):
             for d in range(dilation_factor):
                 self.blocks.append(Conv1DBlock(b_size, h_size, kernel_size, 2**d, skip_size))
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        key = prefix + "video_projection.weight"
+        if key in state_dict and state_dict[key].ndim == 3:
+            state_dict[key] = state_dict[key].squeeze(-1)
+        super()._load_from_state_dict(state_dict, prefix, *args)
 
     def forward(self, x, video=None):
         batch_size, _, T = x.shape
@@ -83,11 +98,16 @@ class Separation(nn.Module):
         x_block = x_new
         for index, block in enumerate(self.blocks):
             if video is not None and index == self.video_block:
-                video = self.video_projection(video)
-                video = F.interpolate(
-                    video, size=T, mode="linear", align_corners=False
-                )
-                x_block = x_block + video.to(x_block.dtype)
+                if self.use_concat:
+                    video = F.interpolate(video, size=T, mode="linear", align_corners=False)
+                    x_block = torch.cat([x_block, video.to(x_block.dtype)], dim=1)
+                    x_block = self.video_projection(x_block.transpose(1, 2)).transpose(1, 2)
+                else:
+                    video = self.video_projection(video.transpose(1, 2)).transpose(1, 2)
+                    video = F.interpolate(
+                        video, size=T, mode="linear", align_corners=False
+                    )
+                    x_block = x_block + video.to(x_block.dtype)
             residual_branch, skip_conn_branch = block(x_block)
             x_block = residual_branch
             skip_sum += skip_conn_branch
@@ -102,7 +122,7 @@ class Separation(nn.Module):
 
 
 class ConvTaSNet(nn.Module):
-    def __init__(self, n_filters, n_speakers, dilation_factor, repeat, b_size, h_size, skip_size, encoder_kernel_size, tcn_kernel_size, video_features=None, video_encoder=None):
+    def __init__(self, n_filters, n_speakers, dilation_factor, repeat, b_size, h_size, skip_size, encoder_kernel_size, tcn_kernel_size, video_features=None, video_encoder=None, use_concat=False):
         super().__init__()
 
         self.stride = encoder_kernel_size // 2
@@ -119,6 +139,7 @@ class ConvTaSNet(nn.Module):
             repeat=repeat, 
             num_speakers=n_speakers,
             video_features=video_features,
+            use_concat=use_concat,
         )
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
         self.video_encoder = video_encoder

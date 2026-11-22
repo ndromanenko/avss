@@ -4,6 +4,7 @@ defaults:
 
 model:
   video_features: 32
+  use_concat: false
 datasets:
   train:
     use_video: true
