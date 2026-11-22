@@ -240,7 +240,14 @@ class SepFormer(nn.Module):
         self.separation = ProcessingBlock(input_size=n_filters, ff_dim=ff_dim, num_layers=num_layers, 
         num_blocks=num_blocks, num_heads=num_heads, chunk_size=chunk_size, num_speakers=num_speakers, max_len=max_len, mask_ff_dim=mask_ff_dim)
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
+        self._init_weights()
 
+    def _init_weights(self):
+        for module in self.modules():
+            if isinstance(module, (nn.Linear, nn.Conv1d, nn.ConvTranspose1d)):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
 
     def forward(self, x):
         

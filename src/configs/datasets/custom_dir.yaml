@@ -1,4 +1,4 @@
 test:
-  _target_: src.datasets.CustomDirDataset
-  dir: "test_data"
-  instance_transforms: ${transforms.instance_transforms.inference}
+  _target_: src.datasets.custom_dir_dataset.CustomDirDataset
+  dir: "dla_dataset"
+  use_video: false

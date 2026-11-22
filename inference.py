@@ -4,7 +4,7 @@ import hydra
 import torch
 from hydra.utils import instantiate
 
-from src.datasets.data_utils import get_dataloaders
+from src.datasets.separation_data_utils import get_dataloaders
 from src.trainer import Inferencer
 from src.utils.init_utils import set_random_seed
 from src.utils.io_utils import ROOT_PATH
@@ -12,7 +12,7 @@ from src.utils.io_utils import ROOT_PATH
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
-@hydra.main(version_base=None, config_path="src/configs", config_name="inference")
+@hydra.main(version_base=None, config_path="src/configs", config_name="separation_inference")
 def main(config):
     """
     Main script for inference. Instantiates the model, metrics, and
@@ -29,38 +29,25 @@ def main(config):
     else:
         device = config.inferencer.device
 
-    # setup text_encoder
-    text_encoder = instantiate(config.text_encoder)
-
-    # setup data_loader instances
-    # batch_transforms should be put on device
-    dataloaders, batch_transforms = get_dataloaders(config, text_encoder, device)
-
-    # build model architecture, then print to console
-    model = instantiate(config.model, n_tokens=len(text_encoder)).to(device)
+    dataloaders = get_dataloaders(config)
+    model = instantiate(config.model).to(device)
     print(model)
 
     # get metrics
-    metrics = {"inference": []}
-    for metric_config in config.metrics.get("inference", []):
-        # use text_encoder in metrics
-        metrics["inference"].append(
-            instantiate(metric_config, text_encoder=text_encoder)
-        )
+    metrics = {"inference": [instantiate(m) for m in config.metrics.get("inference", [])]}
 
     # save_path for model predictions
-    save_path = ROOT_PATH / "data" / "saved" / config.inferencer.save_path
+    save_path = ROOT_PATH / config.inferencer.save_path
     save_path.mkdir(exist_ok=True, parents=True)
 
     inferencer = Inferencer(
-        model=model,
-        config=config,
+        model=model, 
+        config=config, 
         device=device,
         dataloaders=dataloaders,
-        text_encoder=text_encoder,
-        batch_transforms=batch_transforms,
-        save_path=save_path,
-        metrics=metrics,
+        save_path=save_path, 
+        metrics=metrics, 
+        batch_transforms=None, 
         skip_model_load=False,
     )
 

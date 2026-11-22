@@ -1,0 +1,28 @@
+defaults:
+  - model: sepformer
+  - metrics: separation_inference
+  - datasets: custom_dir
+  - dataloader: example
+  - _self_
+
+sample_rate: 16000
+
+model:
+  n_filters: 256
+  ff_dim: 1024
+  mask_ff_dim: 256
+  num_layers: 8
+
+datasets:
+  test:
+    dir: dla_dataset/audio/test/mix
+
+dataloader:
+  batch_size: 8
+
+inferencer:
+  device_tensors: [mix]
+  device: auto
+  save_path: predictions
+  seed: 1
+  from_pretrained: saved/sf_s_paper/model_best.pth

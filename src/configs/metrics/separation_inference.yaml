@@ -1,0 +1,16 @@
+train:
+  - _target_: src.metrics.separation.SISNRiMetric
+    name: SI-SNRi
+inference:
+  - _target_: src.metrics.separation.SISNRMetric
+    name: SI-SNR
+  - _target_: src.metrics.separation.SISNRiMetric
+    name: SI-SNRi
+  - _target_: src.metrics.separation.SDRiMetric
+    name: SDRi
+  - _target_: src.metrics.separation.PESQMetric
+    name: PESQ
+    fs: ${sample_rate}
+  - _target_: src.metrics.separation.STOIMetric
+    name: STOI
+    fs: ${sample_rate}
