@@ -1,0 +1,21 @@
+defaults:
+  - metrics: separation_inference
+  - dataloader: example
+  - _self_
+
+sample_rate: 16000
+data_dir: dla_dataset
+
+datasets:
+  val:
+    _target_: src.datasets.separation_dataset.SeparationDataset
+    dir: ${data_dir}
+    part: val
+    limit: null
+
+dataloader:
+  batch_size: 32
+  num_workers: 4
+
+checkpoints: "saved/*/model_best.pth"
+out_csv: results/val_metrics.csv

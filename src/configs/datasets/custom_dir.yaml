@@ -1,4 +1,4 @@
 test:
   _target_: src.datasets.custom_dir_dataset.CustomDirDataset
-  dir: "dla_dataset"
+  dir: "/workspace/avss/dla_dataset"
   use_video: false

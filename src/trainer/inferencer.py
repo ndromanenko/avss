@@ -152,9 +152,3 @@ class Inferencer(BaseTrainer):
                     preds[i, spk].numpy(),
                     self.config.sample_rate,
                 )
-
-    def _from_pretrained(self, pretrained_path):
-        if self.config.model.get("video_features") is None:
-            return super()._from_pretrained(pretrained_path)
-        ckpt = torch.load(pretrained_path, self.device, weights_only=False)
-        self.model.load_state_dict(ckpt.get("state_dict", ckpt), strict=False)

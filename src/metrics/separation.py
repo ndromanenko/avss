@@ -1,13 +1,14 @@
 import torch
+from pystoi import stoi as pystoi_stoi
 from torchmetrics.functional.audio import (
     permutation_invariant_training,
     scale_invariant_signal_noise_ratio,
     signal_distortion_ratio,
-    perceptual_evaluation_speech_quality, 
-    short_time_objective_intelligibility
+    perceptual_evaluation_speech_quality
 )
 
-from functools import partial 
+from functools import partial
+import multiprocessing as mp
 
 from src.metrics.base_metric import BaseMetric
 
@@ -56,9 +57,9 @@ class SDRiMetric(BaseMetric):
 
 
 class PESQMetric(BaseMetric):
-    def __init__(self, fs=16000, mode="wb", *args, **kwargs):
+    def __init__(self, fs=16000, mode="wb", n_processes=1, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.metric_func = partial(perceptual_evaluation_speech_quality, fs=fs, mode=mode)
+        self.metric_func = partial(perceptual_evaluation_speech_quality, fs=fs, mode=mode, n_processes=n_processes)
 
     @torch.no_grad()
     def __call__(self, predictions, targets, **batch):
@@ -68,12 +69,27 @@ class PESQMetric(BaseMetric):
 
 
 class STOIMetric(BaseMetric):
-    def __init__(self, fs=16000, *args, **kwargs):
+    def __init__(self, fs=16000, extended=False, n_processes=1, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.metric_func = partial(short_time_objective_intelligibility, fs=fs)
+        self.fs = fs
+        self.extended = extended
+        self.n_processes = n_processes
+        self._pool = None
+
+    def _map(self, args):
+        if self.n_processes <= 1:
+            return [pystoi_stoi(*a) for a in args]
+        if self._pool is None:
+            self._pool = mp.get_context("fork").Pool(self.n_processes)
+        return self._pool.starmap(pystoi_stoi, args)
+
+    def _stoi_batch(self, preds, target):
+        p = preds.detach().float().cpu().numpy()
+        t = target.detach().float().cpu().numpy()
+        vals = self._map([(t[i], p[i], self.fs, self.extended) for i in range(len(p))])
+        return torch.tensor(vals, dtype=torch.float32, device=preds.device)
 
     @torch.no_grad()
     def __call__(self, predictions, targets, **batch):
-        scores, _ = get_pit(predictions, targets, self.metric_func)
-        res = scores.mean().item()
-        return res
+        scores, _ = get_pit(predictions, targets, self._stoi_batch)
+        return scores.mean().item()

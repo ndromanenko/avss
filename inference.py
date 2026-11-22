@@ -3,6 +3,7 @@ import warnings
 import hydra
 import torch
 from hydra.utils import instantiate
+from omegaconf import open_dict
 
 from src.datasets.separation_data_utils import get_dataloaders
 from src.trainer import Inferencer
@@ -28,6 +29,16 @@ def main(config):
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = config.inferencer.device
+
+    # модель собираем по конфигу, сохранённому в самом чекпоинте при обучении
+    ckpt = torch.load(config.inferencer.from_pretrained, map_location="cpu", weights_only=False)
+    if isinstance(ckpt, dict) and ckpt.get("config") is not None:
+        with open_dict(config):
+            config.model = ckpt["config"]["model"]
+    del ckpt
+    if config.model.get("video_features") is not None:
+        with open_dict(config):
+            config.datasets.test.use_video = True
 
     dataloaders = get_dataloaders(config)
     model = instantiate(config.model).to(device)

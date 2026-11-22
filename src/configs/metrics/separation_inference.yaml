@@ -11,6 +11,8 @@ inference:
   - _target_: src.metrics.separation.PESQMetric
     name: PESQ
     fs: ${sample_rate}
+    n_processes: 6
   - _target_: src.metrics.separation.STOIMetric
     name: STOI
     fs: ${sample_rate}
+    n_processes: 6
