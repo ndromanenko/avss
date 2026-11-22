@@ -68,6 +68,13 @@ class SeparationTrainer(BaseTrainer):
         self.lr_scheduler.step(logs[self.cfg_trainer.lr_scheduler_metric])
         return logs
 
+    def _resume_checkpoint(self, resume_path):
+        super()._resume_checkpoint(resume_path)
+        for parameter, state in self.optimizer.state.items():
+            if "exp_avg" in state:
+                state["exp_avg"] = state["exp_avg"].reshape_as(parameter)
+                state["exp_avg_sq"] = state["exp_avg_sq"].reshape_as(parameter)
+
     def _from_pretrained(self, pretrained_path):
         if self.config.model.get("video_features") is None:
             return super()._from_pretrained(pretrained_path)

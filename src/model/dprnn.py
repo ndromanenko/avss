@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 import torch.nn.functional as F
 
@@ -66,11 +67,12 @@ class DPRNNBlock(nn.Module):
 
 
 class ProcessingBlock(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features=None):
+    def __init__(self, input_size, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features=None, use_concat=False):
         super().__init__()
         self.input_size = input_size 
         self.chunk_size = chunk_size
         self.num_speakers = num_speakers
+        self.use_concat = use_concat
         self.blocks = nn.ModuleList()
         for _ in range(num_blocks):
             self.blocks.append(DPRNNBlock(input_size, hidden_size, num_layers))
@@ -79,8 +81,21 @@ class ProcessingBlock(nn.Module):
         self.conv_out = nn.Conv1d(in_channels=input_size, out_channels=num_speakers * input_size, kernel_size=1)
         self.sigma = nn.Sigmoid()
         if video_features is not None:
-            self.video_projection = nn.Conv1d(num_speakers * video_features, input_size, 1, bias=False)
-            nn.init.zeros_(self.video_projection.weight)
+            if use_concat:
+                self.video_projection = nn.Sequential(
+                    nn.Linear(input_size + num_speakers * video_features, input_size),
+                    nn.ReLU(),
+                    nn.Linear(input_size, input_size),
+                )
+            else:
+                self.video_projection = nn.Linear(num_speakers * video_features, input_size, bias=False)
+                nn.init.zeros_(self.video_projection.weight)
+
+    def _load_from_state_dict(self, state_dict, prefix, *args):
+        key = prefix + "video_projection.weight"
+        if key in state_dict and state_dict[key].ndim == 3:
+            state_dict[key] = state_dict[key].squeeze(-1)
+        super()._load_from_state_dict(state_dict, prefix, *args)
 
     def _segmentation(self, x, chunk_size):
         step_size = chunk_size // 2
@@ -114,9 +129,14 @@ class ProcessingBlock(nn.Module):
     def forward(self, x, video=None):
         B, _, L = x.shape
         if video is not None:
-            video = self.video_projection(video)
-            video = F.interpolate(video, size=L, mode="linear", align_corners=False)
-            x = x + video.to(x.dtype)
+            if self.use_concat:
+                video = F.interpolate(video, size=L, mode="linear", align_corners=False)
+                x = torch.cat([x, video.to(x.dtype)], dim=1)
+                x = self.video_projection(x.transpose(1, 2)).transpose(1, 2)
+            else:
+                video = self.video_projection(video.transpose(1, 2)).transpose(1, 2)
+                video = F.interpolate(video, size=L, mode="linear", align_corners=False)
+                x = x + video.to(x.dtype)
 
         x_seg = self._segmentation(x, self.chunk_size)
         x_block = x_seg
@@ -144,14 +164,14 @@ class Decoder(nn.Module):
 
 
 class DualPathRNN(nn.Module):
-    def __init__(self, n_filters, num_speakers, hidden_size, encoder_kernel_size, num_blocks, num_layers, chunk_size, video_features=None, video_encoder=None):
+    def __init__(self, n_filters, num_speakers, hidden_size, encoder_kernel_size, num_blocks, num_layers, chunk_size, video_features=None, video_encoder=None, use_concat=False):
         super().__init__()
 
         self.stride = encoder_kernel_size // 2
         self.kernel_size = encoder_kernel_size
 
         self.encoder = Encoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
-        self.separation = ProcessingBlock(n_filters, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features)
+        self.separation = ProcessingBlock(n_filters, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features, use_concat)
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
         self.video_encoder = video_encoder
         if self.video_encoder is None and video_features is not None:
