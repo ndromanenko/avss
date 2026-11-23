@@ -67,12 +67,16 @@ class DPRNNBlock(nn.Module):
 
 
 class ProcessingBlock(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features=None, use_concat=False):
+    def __init__(self, input_size, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features=None, use_concat=False, normalize_fusion=False):
         super().__init__()
         self.input_size = input_size 
         self.chunk_size = chunk_size
         self.num_speakers = num_speakers
         self.use_concat = use_concat
+        self.normalize_fusion = normalize_fusion
+        if normalize_fusion:
+            self.audio_norm = nn.GroupNorm(1, input_size, affine=False)
+            self.video_norm = nn.GroupNorm(1, input_size, affine=False)
         self.blocks = nn.ModuleList()
         for _ in range(num_blocks):
             self.blocks.append(DPRNNBlock(input_size, hidden_size, num_layers))
@@ -136,6 +140,9 @@ class ProcessingBlock(nn.Module):
             else:
                 video = self.video_projection(video.transpose(1, 2)).transpose(1, 2)
                 video = F.interpolate(video, size=L, mode="linear", align_corners=False)
+                if self.normalize_fusion:
+                    x = self.audio_norm(x.float())
+                    video = self.video_norm(video.float())
                 x = x + video.to(x.dtype)
 
         x_seg = self._segmentation(x, self.chunk_size)
@@ -164,14 +171,14 @@ class Decoder(nn.Module):
 
 
 class DualPathRNN(nn.Module):
-    def __init__(self, n_filters, num_speakers, hidden_size, encoder_kernel_size, num_blocks, num_layers, chunk_size, video_features=None, video_encoder=None, use_concat=False):
+    def __init__(self, n_filters, num_speakers, hidden_size, encoder_kernel_size, num_blocks, num_layers, chunk_size, video_features=None, video_encoder=None, use_concat=False, normalize_fusion=False):
         super().__init__()
 
         self.stride = encoder_kernel_size // 2
         self.kernel_size = encoder_kernel_size
 
         self.encoder = Encoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
-        self.separation = ProcessingBlock(n_filters, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features, use_concat)
+        self.separation = ProcessingBlock(n_filters, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features, use_concat, normalize_fusion)
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
         self.video_encoder = video_encoder
         if self.video_encoder is None and video_features is not None:
