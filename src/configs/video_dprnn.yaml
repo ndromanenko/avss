@@ -5,6 +5,7 @@ defaults:
 model:
   video_features: 32
   use_concat: false
+  normalize_fusion: false
 datasets:
   train:
     use_video: true
