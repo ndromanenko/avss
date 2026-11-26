@@ -1,0 +1,30 @@
+defaults:
+  - vit_dprnn_duble_loss
+  - _self_
+
+model:
+  encoder_kernel_size: 8
+  use_concat: false
+  normalize_fusion: true
+
+dataloader:
+  batch_size: 16
+
+optimizer:
+  lr: 0.001
+
+loss_function:
+  lambda_video: 0.1
+  temperature: 0.1
+
+trainer:
+  n_epochs: 100
+  early_stop: 0
+  seed: 42
+  freeze_audio: false
+  from_pretrained: null
+  resume_from: null
+  audio_encoder_checkpoint: ckpt/encoder_ce_model.pth
+
+writer:
+  run_name: vit_dprnn_duble_loss_k8_bs16_norm_scratch_100ep
