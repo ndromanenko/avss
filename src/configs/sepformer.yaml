@@ -13,16 +13,18 @@ dataloader:
   batch_size: 32
 
 optimizer:
-  _target_: torch.optim.Adam
-  lr: 0.00015
+  _target_: torch.optim.AdamW
+  lr: 1.5e-4
+  weight_decay: 1e-3
 
 lr_scheduler:
-  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-  mode: max
-  factor: 0.5
-  patience: 2
-  threshold_mode: abs
-  threshold: 0.01
+  _target_: torch.optim.lr_scheduler.OneCycleLR
+  max_lr: 5e-4
+  pct_start: 0.1
+  steps_per_epoch: ${trainer.epoch_len}
+  epochs: ${trainer.n_epochs}
+  anneal_strategy: cos
+  cycle_momentum: false
 
 loss_function:
   _target_: src.loss.PITSISNRLoss
@@ -37,7 +39,7 @@ writer:
 
 trainer:
   n_epochs: 100
-  epoch_len: null
+  epoch_len: 625
   device: auto
   device_tensors: [mix, targets]
   seed: 42
@@ -48,7 +50,7 @@ trainer:
   skip_oom: false
   lr_scheduler_metric: val_SI-SNRi
   monitor: "max val_SI-SNRi"
-  early_stop: 10
+  early_stop: ${trainer.n_epochs}
   save_period: 5
   save_dir: saved
   resume_from: null

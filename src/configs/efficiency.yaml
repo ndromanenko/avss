@@ -1,0 +1,5 @@
+checkpoint: ckpt/model_best.pth
+data_dir: data/test_with_targets
+
+n_warmup: 10
+n_runs: 100

@@ -1,0 +1,18 @@
+defaults:
+  - model: dprnn
+  - metrics: separation_inference
+  - datasets: custom_dir
+  - dataloader: example
+  - _self_
+
+sample_rate: 16000
+
+dataloader:
+  batch_size: 8
+
+inferencer:
+  device_tensors: [mix]   # val: [mix,targets], test: [mix]
+  device: auto
+  save_path: predictions
+  seed: 1
+  from_pretrained: "/workspace/avss/saved/dprnn_eks8_bs16/model_best.pth"

@@ -4,7 +4,7 @@ from tqdm.auto import tqdm
 
 from src.metrics.separation import get_sisnr
 from src.trainer.base_trainer import BaseTrainer
-
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 class SeparationTrainer(BaseTrainer):
     def process_batch(self, batch, metrics):
@@ -34,6 +34,8 @@ class SeparationTrainer(BaseTrainer):
             batch["loss"].backward()
             self._clip_grad_norm()
             self.optimizer.step()
+            if not isinstance(self.lr_scheduler, ReduceLROnPlateau):
+                self.lr_scheduler.step()
 
         batch_size = batch["mix"].shape[0]
         for loss_name in self.config.writer.loss_names:
@@ -65,7 +67,8 @@ class SeparationTrainer(BaseTrainer):
             values = self._evaluation_epoch(epoch, part, dataloader)
             logs.update({f"{part}_{name}": value for name, value in values.items()})
 
-        self.lr_scheduler.step(logs[self.cfg_trainer.lr_scheduler_metric])
+        if isinstance(self.lr_scheduler, ReduceLROnPlateau):
+            self.lr_scheduler.step(logs[self.cfg_trainer.lr_scheduler_metric])
         return logs
 
     def _resume_checkpoint(self, resume_path):

@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import soundfile as sf
 import torch
+from torchmetrics.functional.audio import pit_permutate
 from tqdm.auto import tqdm
 
+from src.metrics.separation import get_sisnr
 from src.metrics.tracker import MetricTracker
 from src.trainer.base_trainer import BaseTrainer
 
@@ -22,7 +25,6 @@ class Inferencer(BaseTrainer):
         config,
         device,
         dataloaders,
-        text_encoder,
         save_path,
         metrics=None,
         batch_transforms=None,
@@ -37,7 +39,6 @@ class Inferencer(BaseTrainer):
             device (str): device for tensors and model.
             dataloaders (dict[DataLoader]): dataloaders for different
                 sets of data.
-            text_encoder (CTCTextEncoder): text encoder.
             save_path (str): path to save model predictions and other
                 information.
             metrics (dict): dict with the definition of metrics for
@@ -62,8 +63,6 @@ class Inferencer(BaseTrainer):
 
         self.model = model
         self.batch_transforms = batch_transforms
-
-        self.text_encoder = text_encoder
 
         # define dataloaders
         self.evaluation_dataloaders = {k: v for k, v in dataloaders.items()}
@@ -101,93 +100,55 @@ class Inferencer(BaseTrainer):
         return part_logs
 
     def process_batch(self, batch_idx, batch, metrics, part):
-        """
-        Run batch through the model, compute metrics, and
-        save predictions to disk.
-
-        Save directory is defined by save_path in the inference
-        config and current partition.
-
-        Args:
-            batch_idx (int): the index of the current batch.
-            batch (dict): dict-based batch containing the data from
-                the dataloader.
-            metrics (MetricTracker): MetricTracker object that computes
-                and aggregates the metrics. The metrics depend on the type
-                of the partition (train or inference).
-            part (str): name of the partition. Used to define proper saving
-                directory.
-        Returns:
-            batch (dict): dict-based batch containing the data from
-                the dataloader (possibly transformed via batch transform)
-                and model outputs.
-        """
-        # TODO change inference logic so it suits ASR assignment
-        # and task pipeline
-
         batch = self.move_batch_to_device(batch)
-        batch = self.transform_batch(batch)  # transform batch on device -- faster
 
-        outputs = self.model(**batch)
-        batch.update(outputs)
-        # [B, T, V]
+        if "video" in batch:
+            predictions = self.model(batch["mix"], batch["video"])
+        else:
+            predictions = self.model(batch["mix"])
+        batch["predictions"] = predictions.float()
 
-        if metrics is not None:
-            for met in self.metrics["inference"]:
-                metrics.update(met.name, met(**batch))
+        if "targets" in batch:
+            _, perm = get_sisnr(batch["predictions"], batch["targets"])
+            batch["predictions"] = pit_permutate(batch["predictions"], perm)
+            if metrics is not None:
+                for met in self.metrics["inference"]:
+                    metrics.update(met.name, met(**batch), n=batch["mix"].shape[0])
 
-        batch_size = batch["log_probs"].shape[0]
-        pred_texts = []
-        for i in range(batch_size):
-            audio_length = batch["log_probs_length"][i]
-            pred_text = self.text_encoder.ctc_beam_search(
-                batch["log_probs"][i, :audio_length]
-                .clone()
-                .exp()
-                .detach()
-                .cpu()
-                .numpy()
-            )
-            pred_texts.append(pred_text)
-            utterance_id = Path(batch["audio_path"][i]).stem
-
-            if self.save_path is not None:
-                with open(self.save_path / part / f"{utterance_id}.txt", "w") as f:
-                    f.write(pred_text)
-
+        if self.save_path is not None:
+            self._save_predictions(batch, part)
         return batch
 
     def _inference_part(self, part, dataloader):
-        """
-        Run inference on a given partition and save predictions
-
-        Args:
-            part (str): name of the partition.
-            dataloader (DataLoader): dataloader for the given partition.
-        Returns:
-            logs (dict): metrics, calculated on the partition.
-        """
-
         self.is_train = False
         self.model.eval()
+        if self.evaluation_metrics is not None:
+            self.evaluation_metrics.reset()
 
-        self.evaluation_metrics.reset()
-
-        # create Save dir
         if self.save_path is not None:
-            (self.save_path / part).mkdir(exist_ok=True, parents=True)
+            for spk in ("s1", "s2"):
+                (self.save_path / part / spk).mkdir(exist_ok=True, parents=True)
 
         with torch.no_grad():
-            for batch_idx, batch in tqdm(
-                enumerate(dataloader),
-                desc=part,
-                total=len(dataloader),
-            ):
-                batch = self.process_batch(
-                    batch_idx=batch_idx,
-                    batch=batch,
-                    part=part,
-                    metrics=self.evaluation_metrics,
-                )
+            for batch_idx, batch in tqdm(enumerate(dataloader), desc=part, total=len(dataloader)):
+                self.process_batch(batch_idx, batch, self.evaluation_metrics, part)
 
-        return self.evaluation_metrics.result()
+        has_targets = dataloader.dataset.has_targets
+        return self.evaluation_metrics.result() if has_targets and self.evaluation_metrics else {}
+
+    def _save_predictions(self, batch, part):
+        preds = batch["predictions"].detach().cpu()
+
+        preds = preds - preds.mean(dim=-1, keepdim=True)
+
+        peak = preds.abs().amax(dim=-1, keepdim=True).clamp_min(1e-8)
+        preds = 0.9 * preds / peak
+
+        for i, name in enumerate(batch["name"]):
+            for spk in range(preds.shape[1]):
+                out = self.save_path / part / f"s{spk + 1}" / name
+                sf.write(
+                    out,
+                    preds[i, spk].numpy(),
+                    self.config.sample_rate,
+                )
