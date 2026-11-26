@@ -1,6 +1,9 @@
 import torch
 from torch import Tensor, nn
-from torchmetrics.functional.audio import permutation_invariant_training, scale_invariant_signal_noise_ratio
+from torchmetrics.functional.audio import (
+    permutation_invariant_training,
+    scale_invariant_signal_noise_ratio,
+)
 
 
 class PITSISNRLoss(nn.Module):

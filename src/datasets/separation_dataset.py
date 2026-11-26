@@ -49,5 +49,7 @@ class SeparationDataset(Dataset):
             item["targets"] = torch.stack([s1, s2])
         if self.use_video:
             first, second = path.stem.split("_")
-            item["video"] = torch.stack([self.load_video(first), self.load_video(second)])
+            item["video"] = torch.stack(
+                [self.load_video(first), self.load_video(second)]
+            )
         return item

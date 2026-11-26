@@ -16,7 +16,9 @@ def load_example(mix_path, target_dir, pred_paths):
     name = mix_path.name
     return {
         "mix": load_audio(mix_path),
-        "targets": torch.stack([load_audio(target_dir / s / name) for s in ("s1", "s2")]),
+        "targets": torch.stack(
+            [load_audio(target_dir / s / name) for s in ("s1", "s2")]
+        ),
         "predictions": torch.stack([load_audio(p) for p in pred_paths]),
     }
 
@@ -38,7 +40,10 @@ def main(config):
     sums = {m.name: 0 for m in metrics}
     count = 0
     for start in tqdm(range(0, len(pairs), config.batch_size)):
-        examples = [load_example(mix, target_dir, preds) for mix, preds in pairs[start : start + config.batch_size]]
+        examples = [
+            load_example(mix, target_dir, preds)
+            for mix, preds in pairs[start : start + config.batch_size]
+        ]
 
         by_length = {}
         for ex in examples:

@@ -130,11 +130,17 @@ class Inferencer(BaseTrainer):
                 (self.save_path / part / spk).mkdir(exist_ok=True, parents=True)
 
         with torch.no_grad():
-            for batch_idx, batch in tqdm(enumerate(dataloader), desc=part, total=len(dataloader)):
+            for batch_idx, batch in tqdm(
+                enumerate(dataloader), desc=part, total=len(dataloader)
+            ):
                 self.process_batch(batch_idx, batch, self.evaluation_metrics, part)
 
         has_targets = dataloader.dataset.has_targets
-        return self.evaluation_metrics.result() if has_targets and self.evaluation_metrics else {}
+        return (
+            self.evaluation_metrics.result()
+            if has_targets and self.evaluation_metrics
+            else {}
+        )
 
     def _save_predictions(self, batch, part):
         preds = batch["predictions"].detach().cpu()

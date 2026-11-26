@@ -1,10 +1,11 @@
 import torch
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torchmetrics.functional.audio import pit_permutate
 from tqdm.auto import tqdm
 
 from src.metrics.separation import get_sisnr
 from src.trainer.base_trainer import BaseTrainer
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 
 class SeparationTrainer(BaseTrainer):
     def process_batch(self, batch, metrics):
@@ -51,13 +52,17 @@ class SeparationTrainer(BaseTrainer):
         self.writer.set_step((epoch - 1) * self.epoch_len)
         self.writer.add_scalar("epoch", epoch)
 
-        for batch_idx, batch in enumerate(tqdm(self.train_dataloader, total=self.epoch_len, desc="train")):
+        for batch_idx, batch in enumerate(
+            tqdm(self.train_dataloader, total=self.epoch_len, desc="train")
+        ):
             batch = self.process_batch(batch, self.train_metrics)
             self.train_metrics.update("grad_norm", self._get_grad_norm())
 
             if batch_idx % self.log_step == 0:
                 self.writer.set_step((epoch - 1) * self.epoch_len + batch_idx)
-                self.writer.add_scalar("learning rate", self.optimizer.param_groups[0]["lr"])
+                self.writer.add_scalar(
+                    "learning rate", self.optimizer.param_groups[0]["lr"]
+                )
                 self._log_scalars(self.train_metrics)
             if batch_idx + 1 >= self.epoch_len:
                 break
@@ -101,10 +106,12 @@ class SeparationTrainer(BaseTrainer):
             self.writer.add_audio(f"mix_{i}", mix[i], self.config.sample_rate)
             for speaker in range(2):
                 self.writer.add_audio(
-                    f"target_s{speaker+1}_{i}", targets[i, speaker],
+                    f"target_s{speaker + 1}_{i}",
+                    targets[i, speaker],
                     self.config.sample_rate,
                 )
                 self.writer.add_audio(
-                    f"prediction_s{speaker+1}_{i}", predictions[i, speaker],
+                    f"prediction_s{speaker + 1}_{i}",
+                    predictions[i, speaker],
                     self.config.sample_rate,
                 )

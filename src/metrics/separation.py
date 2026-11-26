@@ -1,28 +1,31 @@
+import multiprocessing as mp
+from functools import partial
+
 import torch
 from pystoi import stoi as pystoi_stoi
 from torchmetrics.functional.audio import (
+    perceptual_evaluation_speech_quality,
     permutation_invariant_training,
     scale_invariant_signal_noise_ratio,
     signal_distortion_ratio,
-    perceptual_evaluation_speech_quality
 )
-
-from functools import partial
-import multiprocessing as mp
 
 from src.metrics.base_metric import BaseMetric
 
 
 def get_pit(predictions, targets, metric_func):
     return permutation_invariant_training(
-        predictions, targets,
+        predictions,
+        targets,
         metric_func=metric_func,
         mode="speaker-wise",
         eval_func="max",
     )
 
+
 def get_sisnr(predictions, targets):
     return get_pit(predictions, targets, scale_invariant_signal_noise_ratio)
+
 
 class SISNRMetric(BaseMetric):
     @torch.no_grad()
@@ -59,7 +62,12 @@ class SDRiMetric(BaseMetric):
 class PESQMetric(BaseMetric):
     def __init__(self, fs=16000, mode="wb", n_processes=1, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.metric_func = partial(perceptual_evaluation_speech_quality, fs=fs, mode=mode, n_processes=n_processes)
+        self.metric_func = partial(
+            perceptual_evaluation_speech_quality,
+            fs=fs,
+            mode=mode,
+            n_processes=n_processes,
+        )
 
     @torch.no_grad()
     def __call__(self, predictions, targets, **batch):

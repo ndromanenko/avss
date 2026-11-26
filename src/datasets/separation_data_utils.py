@@ -8,5 +8,12 @@ def get_dataloaders(config):
     dataloaders = {}
     for part in config.datasets:
         dataset = instantiate(config.datasets[part])
-        dataloaders[part] = instantiate(config.dataloader, dataset=dataset, collate_fn=collate_fn, shuffle=part == "train", drop_last=part == "train", worker_init_fn=set_worker_seed)
+        dataloaders[part] = instantiate(
+            config.dataloader,
+            dataset=dataset,
+            collate_fn=collate_fn,
+            shuffle=part == "train",
+            drop_last=part == "train",
+            worker_init_fn=set_worker_seed,
+        )
     return dataloaders

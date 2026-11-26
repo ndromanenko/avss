@@ -1,6 +1,6 @@
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 from src.model.dprnn import DualPathRNN, Encoder
 from src.utils.io_utils import ROOT_PATH
@@ -9,12 +9,18 @@ from src.utils.io_utils import ROOT_PATH
 class DubleLossDualPathRNN(DualPathRNN):
     def __init__(self, audio_features=256, audio_kernel_size=32, **kwargs):
         super().__init__(**kwargs)
-        self.audio_target_encoder = Encoder(audio_features, audio_kernel_size, audio_kernel_size // 2)
+        self.audio_target_encoder = Encoder(
+            audio_features, audio_kernel_size, audio_kernel_size // 2
+        )
         self.audio_target_encoder.requires_grad_(False)
-        self.ce_projection = nn.Conv1d(kwargs["video_features"], audio_features, kernel_size=1)
+        self.ce_projection = nn.Conv1d(
+            kwargs["video_features"], audio_features, kernel_size=1
+        )
 
     def load_audio_encoder(self, checkpoint_path):
-        checkpoint = torch.load(ROOT_PATH / checkpoint_path, map_location="cpu", weights_only=False)
+        checkpoint = torch.load(
+            ROOT_PATH / checkpoint_path, map_location="cpu", weights_only=False
+        )
         state_dict = {}
 
         for name, value in checkpoint["state_dict"].items():
@@ -31,7 +37,9 @@ class DubleLossDualPathRNN(DualPathRNN):
         if targets is None:
             return super().forward(x, video)
 
-        predictions, video_features = super().forward(x, video, return_video_features=True)
+        predictions, video_features = super().forward(
+            x, video, return_video_features=True
+        )
 
         batch_size, speakers, _ = targets.shape
         frames = video_features.shape[-1]

@@ -25,7 +25,9 @@ def evaluate(ckpt_path, config, metrics, device):
     model.load_state_dict(ckpt["state_dict"])
 
     dataset = instantiate(config.datasets.val, use_video=use_video)
-    loader = instantiate(config.dataloader, dataset=dataset, collate_fn=collate_fn, shuffle=False)
+    loader = instantiate(
+        config.dataloader, dataset=dataset, collate_fn=collate_fn, shuffle=False
+    )
 
     sums = {m.name: 0 for m in metrics}
     count = 0
@@ -55,7 +57,9 @@ def evaluate(ckpt_path, config, metrics, device):
     return row
 
 
-@hydra.main(version_base=None, config_path="src/configs", config_name="eval_checkpoints")
+@hydra.main(
+    version_base=None, config_path="src/configs", config_name="eval_checkpoints"
+)
 def main(config):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     metrics = [instantiate(m) for m in config.metrics.inference]

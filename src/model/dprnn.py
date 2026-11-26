@@ -1,6 +1,6 @@
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 from src.model.video_encoder import VideoEncoder
 
@@ -9,7 +9,12 @@ class Encoder(nn.Module):
     def __init__(self, n_filters, kernel_size, stride):
         super().__init__()
 
-        self.conv = nn.Conv1d(in_channels=1, out_channels=n_filters, kernel_size=kernel_size, stride=stride)
+        self.conv = nn.Conv1d(
+            in_channels=1,
+            out_channels=n_filters,
+            kernel_size=kernel_size,
+            stride=stride,
+        )
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -23,7 +28,13 @@ class Encoder(nn.Module):
 class IntraChunkBlock(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers):
         super().__init__()
-        self.bi_lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True)
+        self.bi_lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            bidirectional=True,
+        )
         self.fc = nn.Linear(hidden_size * 2, input_size)
         self.gln = nn.GroupNorm(num_groups=1, num_channels=input_size, eps=1e-8)
 
@@ -40,7 +51,13 @@ class IntraChunkBlock(nn.Module):
 class InterChunkBlock(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers):
         super().__init__()
-        self.bi_lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True)
+        self.bi_lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            bidirectional=True,
+        )
         self.fc = nn.Linear(hidden_size * 2, input_size)
         self.gln = nn.GroupNorm(num_groups=1, num_channels=input_size, eps=1e-8)
 
@@ -67,9 +84,20 @@ class DPRNNBlock(nn.Module):
 
 
 class ProcessingBlock(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features=None, use_concat=False, normalize_fusion=False):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        num_layers,
+        num_blocks,
+        chunk_size,
+        num_speakers,
+        video_features=None,
+        use_concat=False,
+        normalize_fusion=False,
+    ):
         super().__init__()
-        self.input_size = input_size 
+        self.input_size = input_size
         self.chunk_size = chunk_size
         self.num_speakers = num_speakers
         self.use_concat = use_concat
@@ -82,7 +110,11 @@ class ProcessingBlock(nn.Module):
             self.blocks.append(DPRNNBlock(input_size, hidden_size, num_layers))
 
         self.prelu = nn.PReLU()
-        self.conv_out = nn.Conv1d(in_channels=input_size, out_channels=num_speakers * input_size, kernel_size=1)
+        self.conv_out = nn.Conv1d(
+            in_channels=input_size,
+            out_channels=num_speakers * input_size,
+            kernel_size=1,
+        )
         self.sigma = nn.Sigmoid()
         if video_features is not None:
             if use_concat:
@@ -92,7 +124,9 @@ class ProcessingBlock(nn.Module):
                     nn.Linear(input_size, input_size),
                 )
             else:
-                self.video_projection = nn.Linear(num_speakers * video_features, input_size, bias=False)
+                self.video_projection = nn.Linear(
+                    num_speakers * video_features, input_size, bias=False
+                )
                 nn.init.zeros_(self.video_projection.weight)
 
     def _load_from_state_dict(self, state_dict, prefix, *args):
@@ -110,7 +144,11 @@ class ProcessingBlock(nn.Module):
 
         x = F.pad(x, (left_pad, right_pad))
 
-        return x.unfold(dimension=-1, size=chunk_size, step=chunk_size // 2,).transpose(-1, -2)
+        return x.unfold(
+            dimension=-1,
+            size=chunk_size,
+            step=chunk_size // 2,
+        ).transpose(-1, -2)
 
     def _overlap_add(self, x, chunk_size, original_length):
         B, N, K, S = x.shape
@@ -124,11 +162,13 @@ class ProcessingBlock(nn.Module):
 
         padded_length = (S - 1) * step_size + K
 
-        x = F.fold(x, output_size=(1, padded_length), kernel_size=(1, K), stride=(1, step_size))
+        x = F.fold(
+            x, output_size=(1, padded_length), kernel_size=(1, K), stride=(1, step_size)
+        )
 
         x = x.squeeze(2)
 
-        return x[..., left_pad:left_pad + original_length]
+        return x[..., left_pad : left_pad + original_length]
 
     def forward(self, x, video=None):
         B, _, L = x.shape
@@ -158,12 +198,15 @@ class ProcessingBlock(nn.Module):
 
         masks = masks.reshape(B, self.num_speakers, self.input_size, L)
 
-        return masks 
+        return masks
+
 
 class Decoder(nn.Module):
     def __init__(self, in_size, kernel_size, stride):
         super().__init__()
-        self.conv = nn.ConvTranspose1d(in_channels=in_size, out_channels=1, kernel_size=kernel_size, stride=stride)
+        self.conv = nn.ConvTranspose1d(
+            in_channels=in_size, out_channels=1, kernel_size=kernel_size, stride=stride
+        )
 
     def forward(self, x):
         x = self.conv(x)
@@ -171,19 +214,41 @@ class Decoder(nn.Module):
 
 
 class DualPathRNN(nn.Module):
-    def __init__(self, n_filters, num_speakers, hidden_size, encoder_kernel_size, num_blocks, num_layers, chunk_size, video_features=None, video_encoder=None, use_concat=False, normalize_fusion=False):
+    def __init__(
+        self,
+        n_filters,
+        num_speakers,
+        hidden_size,
+        encoder_kernel_size,
+        num_blocks,
+        num_layers,
+        chunk_size,
+        video_features=None,
+        video_encoder=None,
+        use_concat=False,
+        normalize_fusion=False,
+    ):
         super().__init__()
 
         self.stride = encoder_kernel_size // 2
         self.kernel_size = encoder_kernel_size
 
         self.encoder = Encoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
-        self.separation = ProcessingBlock(n_filters, hidden_size, num_layers, num_blocks, chunk_size, num_speakers, video_features, use_concat, normalize_fusion)
+        self.separation = ProcessingBlock(
+            n_filters,
+            hidden_size,
+            num_layers,
+            num_blocks,
+            chunk_size,
+            num_speakers,
+            video_features,
+            use_concat,
+            normalize_fusion,
+        )
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
         self.video_encoder = video_encoder
         if self.video_encoder is None and video_features is not None:
             self.video_encoder = VideoEncoder(video_features)
-
 
     def freeze_audio(self):
         self.requires_grad_(False)
@@ -191,11 +256,11 @@ class DualPathRNN(nn.Module):
         self.separation.video_projection.requires_grad_(True)
 
     def forward(self, x, video=None, return_video_features=False):
-        
+
         length = x.shape[-1]
         pad = (self.stride - (length - self.kernel_size) % self.stride) % self.stride
         x = F.pad(x, (0, pad))
-        
+
         w = self.encoder(x)
         video_features = None
         if video is not None:

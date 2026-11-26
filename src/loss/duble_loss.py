@@ -18,10 +18,16 @@ class DubleLoss(PITSISNRLoss):
         video_features = F.normalize(video_features.float(), dim=1)
         audio_features = F.normalize(audio_features.float(), dim=1)
 
-        video_features = video_features.reshape(batch_size, speakers, -1, frames).permute(0, 3, 1, 2)
-        audio_features = audio_features.reshape(batch_size, speakers, -1, frames).permute(0, 3, 1, 2)
+        video_features = video_features.reshape(
+            batch_size, speakers, -1, frames
+        ).permute(0, 3, 1, 2)
+        audio_features = audio_features.reshape(
+            batch_size, speakers, -1, frames
+        ).permute(0, 3, 1, 2)
 
-        similarities = torch.matmul(video_features, audio_features.transpose(-1, -2)).mean(dim=1)
+        similarities = torch.matmul(
+            video_features, audio_features.transpose(-1, -2)
+        ).mean(dim=1)
         labels = torch.arange(speakers, device=predictions.device).repeat(batch_size)
         ce_loss = F.cross_entropy(similarities.flatten(0, 1) / self.temperature, labels)
 

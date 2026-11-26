@@ -1,6 +1,6 @@
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 from src.model.video_encoder import VideoEncoder
 
@@ -9,7 +9,12 @@ class Encoder(nn.Module):
     def __init__(self, n_filters, kernel_size, stride):
         super().__init__()
 
-        self.conv = nn.Conv1d(in_channels=1, out_channels=n_filters, kernel_size=kernel_size, stride=stride)
+        self.conv = nn.Conv1d(
+            in_channels=1,
+            out_channels=n_filters,
+            kernel_size=kernel_size,
+            stride=stride,
+        )
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -19,14 +24,18 @@ class Encoder(nn.Module):
 
         return x
 
+
 class Decoder(nn.Module):
     def __init__(self, in_size, kernel_size, stride):
         super().__init__()
-        self.conv = nn.ConvTranspose1d(in_channels=in_size, out_channels=1, kernel_size=kernel_size, stride=stride)
+        self.conv = nn.ConvTranspose1d(
+            in_channels=in_size, out_channels=1, kernel_size=kernel_size, stride=stride
+        )
 
     def forward(self, x):
         x = self.conv(x)
         return x
+
 
 class Conv1DBlock(nn.Module):
     def __init__(self, b_size, h_size, kernel_size, dilation, skip_size):
@@ -35,11 +44,22 @@ class Conv1DBlock(nn.Module):
         self.conv1 = nn.Conv1d(in_channels=b_size, out_channels=h_size, kernel_size=1)
         self.prelu1 = nn.PReLU()
         self.gln1 = nn.GroupNorm(num_groups=1, num_channels=h_size, eps=1e-8)
-        self.d_conv = nn.Conv1d(in_channels=h_size, out_channels=h_size, kernel_size=kernel_size, dilation=dilation, padding=(kernel_size - 1) * dilation // 2, groups=h_size)
+        self.d_conv = nn.Conv1d(
+            in_channels=h_size,
+            out_channels=h_size,
+            kernel_size=kernel_size,
+            dilation=dilation,
+            padding=(kernel_size - 1) * dilation // 2,
+            groups=h_size,
+        )
         self.prelu2 = nn.PReLU()
         self.gln2 = nn.GroupNorm(num_groups=1, num_channels=h_size, eps=1e-8)
-        self.residual_conv = nn.Conv1d(in_channels=h_size, out_channels=b_size, kernel_size=1)
-        self.skip_connetion_conv = nn.Conv1d(in_channels=h_size, out_channels=skip_size, kernel_size=1)
+        self.residual_conv = nn.Conv1d(
+            in_channels=h_size, out_channels=b_size, kernel_size=1
+        )
+        self.skip_connetion_conv = nn.Conv1d(
+            in_channels=h_size, out_channels=skip_size, kernel_size=1
+        )
 
     def forward(self, x):
         x_new = self.conv1(x)
@@ -51,20 +71,36 @@ class Conv1DBlock(nn.Module):
         residual_branch = x + self.residual_conv(x_new)
         skip_conn_branch = self.skip_connetion_conv(x_new)
 
-
         return residual_branch, skip_conn_branch
 
+
 class Separation(nn.Module):
-    def __init__(self, in_size, b_size, h_size, skip_size, kernel_size, dilation_factor, repeat, num_speakers, video_features=None, use_concat=False):
+    def __init__(
+        self,
+        in_size,
+        b_size,
+        h_size,
+        skip_size,
+        kernel_size,
+        dilation_factor,
+        repeat,
+        num_speakers,
+        video_features=None,
+        use_concat=False,
+    ):
         super().__init__()
 
         self.in_size = in_size
         self.num_speakers = num_speakers
         self.use_concat = use_concat
         self.gln1 = nn.GroupNorm(num_groups=1, num_channels=in_size, eps=1e-8)
-        self.conv_in = nn.Conv1d(in_channels=in_size, out_channels=b_size, kernel_size=1)
+        self.conv_in = nn.Conv1d(
+            in_channels=in_size, out_channels=b_size, kernel_size=1
+        )
         self.prelu1 = nn.PReLU()
-        self.conv_out = nn.Conv1d(in_channels=skip_size, out_channels=num_speakers * in_size, kernel_size=1)
+        self.conv_out = nn.Conv1d(
+            in_channels=skip_size, out_channels=num_speakers * in_size, kernel_size=1
+        )
         self.sigma = nn.Sigmoid()
         self.blocks = nn.ModuleList()
         self.video_block = dilation_factor if repeat > 1 else 0
@@ -76,12 +112,16 @@ class Separation(nn.Module):
                     nn.Linear(b_size, b_size),
                 )
             else:
-                self.video_projection = nn.Linear(num_speakers * video_features, b_size, bias=False)
+                self.video_projection = nn.Linear(
+                    num_speakers * video_features, b_size, bias=False
+                )
                 nn.init.zeros_(self.video_projection.weight)
 
         for _ in range(repeat):
             for d in range(dilation_factor):
-                self.blocks.append(Conv1DBlock(b_size, h_size, kernel_size, 2**d, skip_size))
+                self.blocks.append(
+                    Conv1DBlock(b_size, h_size, kernel_size, 2**d, skip_size)
+                )
 
     def _load_from_state_dict(self, state_dict, prefix, *args):
         key = prefix + "video_projection.weight"
@@ -99,9 +139,13 @@ class Separation(nn.Module):
         for index, block in enumerate(self.blocks):
             if video is not None and index == self.video_block:
                 if self.use_concat:
-                    video = F.interpolate(video, size=T, mode="linear", align_corners=False)
+                    video = F.interpolate(
+                        video, size=T, mode="linear", align_corners=False
+                    )
                     x_block = torch.cat([x_block, video.to(x_block.dtype)], dim=1)
-                    x_block = self.video_projection(x_block.transpose(1, 2)).transpose(1, 2)
+                    x_block = self.video_projection(x_block.transpose(1, 2)).transpose(
+                        1, 2
+                    )
                 else:
                     video = self.video_projection(video.transpose(1, 2)).transpose(1, 2)
                     video = F.interpolate(
@@ -122,7 +166,21 @@ class Separation(nn.Module):
 
 
 class ConvTaSNet(nn.Module):
-    def __init__(self, n_filters, n_speakers, dilation_factor, repeat, b_size, h_size, skip_size, encoder_kernel_size, tcn_kernel_size, video_features=None, video_encoder=None, use_concat=False):
+    def __init__(
+        self,
+        n_filters,
+        n_speakers,
+        dilation_factor,
+        repeat,
+        b_size,
+        h_size,
+        skip_size,
+        encoder_kernel_size,
+        tcn_kernel_size,
+        video_features=None,
+        video_encoder=None,
+        use_concat=False,
+    ):
         super().__init__()
 
         self.stride = encoder_kernel_size // 2
@@ -130,13 +188,13 @@ class ConvTaSNet(nn.Module):
 
         self.encoder = Encoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
         self.sep = Separation(
-            in_size=n_filters, 
-            b_size=b_size, 
-            h_size=h_size, 
+            in_size=n_filters,
+            b_size=b_size,
+            h_size=h_size,
             skip_size=skip_size,
-            kernel_size=tcn_kernel_size, 
-            dilation_factor=dilation_factor, 
-            repeat=repeat, 
+            kernel_size=tcn_kernel_size,
+            dilation_factor=dilation_factor,
+            repeat=repeat,
             num_speakers=n_speakers,
             video_features=video_features,
             use_concat=use_concat,
@@ -146,18 +204,17 @@ class ConvTaSNet(nn.Module):
         if self.video_encoder is None and video_features is not None:
             self.video_encoder = VideoEncoder(video_features)
 
-
     def freeze_audio(self):
         self.requires_grad_(False)
         self.video_encoder.requires_grad_(True)
         self.sep.video_projection.requires_grad_(True)
 
     def forward(self, x, video=None):
-        
+
         length = x.shape[-1]
         pad = (self.stride - (length - self.kernel_size) % self.stride) % self.stride
         x = F.pad(x, (0, pad))
-        
+
         w = self.encoder(x)
         video_features = None
         if video is not None:

@@ -1,8 +1,9 @@
 import math
 
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
+
 
 class PositionEncoding(nn.Module):
     def __init__(self, embed_dim, max_len=10_000):
@@ -16,21 +17,27 @@ class PositionEncoding(nn.Module):
 
         pe = torch.zeros(max_len, embed_dim)
         pe[:, 0::2] = torch.sin(positions * div_term)
-        pe[:, 1::2] = torch.cos(positions * div_term[:pe[:, 1::2].shape[1]])
+        pe[:, 1::2] = torch.cos(positions * div_term[: pe[:, 1::2].shape[1]])
 
         self.register_buffer("pe", pe, persistent=False)
 
     def forward(self, x):
-        return x + self.pe[:x.shape[1]].to(
+        return x + self.pe[: x.shape[1]].to(
             device=x.device,
             dtype=x.dtype,
         )
+
 
 class Encoder(nn.Module):
     def __init__(self, n_filters, kernel_size, stride):
         super().__init__()
 
-        self.conv = nn.Conv1d(in_channels=1, out_channels=n_filters, kernel_size=kernel_size, stride=stride)
+        self.conv = nn.Conv1d(
+            in_channels=1,
+            out_channels=n_filters,
+            kernel_size=kernel_size,
+            stride=stride,
+        )
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -40,12 +47,15 @@ class Encoder(nn.Module):
 
         return x
 
+
 class TransformerLayer(nn.Module):
     def __init__(self, embed_dim, num_heads, ff_dim):
         super().__init__()
 
         self.norm1 = nn.LayerNorm(embed_dim)
-        self.mha = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads, batch_first=True)
+        self.mha = nn.MultiheadAttention(
+            embed_dim=embed_dim, num_heads=num_heads, batch_first=True
+        )
         self.norm2 = nn.LayerNorm(embed_dim)
 
         self.ffw = nn.Sequential(
@@ -72,7 +82,11 @@ class TransformerBlock(nn.Module):
         self.pos_enc = PositionEncoding(embed_dim, max_len)
         self.layers = nn.ModuleList()
         for _ in range(num_layers):
-            self.layers.append(TransformerLayer(embed_dim=embed_dim, num_heads=num_heads, ff_dim=ff_dim))
+            self.layers.append(
+                TransformerLayer(
+                    embed_dim=embed_dim, num_heads=num_heads, ff_dim=ff_dim
+                )
+            )
 
     def forward(self, x):
         residual = x
@@ -82,14 +96,19 @@ class TransformerBlock(nn.Module):
             x = layer(x)
 
         return x + residual
-        
 
 
 class IntraChunkBlock(nn.Module):
     def __init__(self, input_size, num_heads, ff_dim, num_layers, max_len):
         super().__init__()
 
-        self.transformer = TransformerBlock(embed_dim=input_size, num_heads=num_heads, ff_dim=ff_dim, num_layers=num_layers, max_len=max_len)
+        self.transformer = TransformerBlock(
+            embed_dim=input_size,
+            num_heads=num_heads,
+            ff_dim=ff_dim,
+            num_layers=num_layers,
+            max_len=max_len,
+        )
 
     def forward(self, x):
         B, N, K, S = x.shape
@@ -109,7 +128,13 @@ class InterChunkBlock(nn.Module):
     def __init__(self, input_size, num_heads, ff_dim, num_layers, max_len):
         super().__init__()
 
-        self.transformer = TransformerBlock(embed_dim=input_size, num_heads=num_heads, ff_dim=ff_dim, num_layers=num_layers, max_len=max_len)
+        self.transformer = TransformerBlock(
+            embed_dim=input_size,
+            num_heads=num_heads,
+            ff_dim=ff_dim,
+            num_layers=num_layers,
+            max_len=max_len,
+        )
 
     def forward(self, x):
         B, N, K, S = x.shape
@@ -128,8 +153,12 @@ class InterChunkBlock(nn.Module):
 class SepFormerBlock(nn.Module):
     def __init__(self, input_size, num_heads, ff_dim, num_layers, max_len):
         super().__init__()
-        self.intra_chunk = IntraChunkBlock(input_size, num_heads, ff_dim, num_layers, max_len)
-        self.inter_chunk = InterChunkBlock(input_size, num_heads, ff_dim, num_layers, max_len)
+        self.intra_chunk = IntraChunkBlock(
+            input_size, num_heads, ff_dim, num_layers, max_len
+        )
+        self.inter_chunk = InterChunkBlock(
+            input_size, num_heads, ff_dim, num_layers, max_len
+        )
 
     def forward(self, x):
         x = self.intra_chunk(x)
@@ -138,14 +167,33 @@ class SepFormerBlock(nn.Module):
 
 
 class ProcessingBlock(nn.Module):
-    def __init__(self, input_size, ff_dim, num_layers, num_blocks, num_heads, chunk_size, num_speakers, max_len, mask_ff_dim):
+    def __init__(
+        self,
+        input_size,
+        ff_dim,
+        num_layers,
+        num_blocks,
+        num_heads,
+        chunk_size,
+        num_speakers,
+        max_len,
+        mask_ff_dim,
+    ):
         super().__init__()
-        self.input_size = input_size 
+        self.input_size = input_size
         self.chunk_size = chunk_size
         self.num_speakers = num_speakers
         self.blocks = nn.ModuleList()
         for _ in range(num_blocks):
-            self.blocks.append(SepFormerBlock(input_size=input_size, num_heads=num_heads, ff_dim=ff_dim, num_layers=num_layers, max_len=max_len))
+            self.blocks.append(
+                SepFormerBlock(
+                    input_size=input_size,
+                    num_heads=num_heads,
+                    ff_dim=ff_dim,
+                    num_layers=num_layers,
+                    max_len=max_len,
+                )
+            )
 
         self.prelu = nn.PReLU()
         self.linear = nn.Linear(input_size, num_speakers * input_size)
@@ -169,7 +217,11 @@ class ProcessingBlock(nn.Module):
 
         x = F.pad(x, (left_pad, right_pad))
 
-        return x.unfold(dimension=-1, size=chunk_size, step=chunk_size // 2,).transpose(-1, -2)
+        return x.unfold(
+            dimension=-1,
+            size=chunk_size,
+            step=chunk_size // 2,
+        ).transpose(-1, -2)
 
     def _overlap_add(self, x, chunk_size, original_length):
         B, N, K, S = x.shape
@@ -183,11 +235,13 @@ class ProcessingBlock(nn.Module):
 
         padded_length = (S - 1) * step_size + K
 
-        x = F.fold(x, output_size=(1, padded_length), kernel_size=(1, K), stride=(1, step_size))
+        x = F.fold(
+            x, output_size=(1, padded_length), kernel_size=(1, K), stride=(1, step_size)
+        )
 
         x = x.squeeze(2)
 
-        return x[..., left_pad:left_pad + original_length]
+        return x[..., left_pad : left_pad + original_length]
 
     def forward(self, x):
         B, _, L = x.shape
@@ -195,7 +249,6 @@ class ProcessingBlock(nn.Module):
         x = self.input_norm(x)
         x = self.input_linear(x)
 
-        
         x_seg = self._segmentation(x, self.chunk_size)
         x_block = x_seg
         for block in self.blocks:
@@ -211,7 +264,7 @@ class ProcessingBlock(nn.Module):
 
         masks = self._overlap_add(masks, self.chunk_size, L)
 
-        masks = masks.reshape(B, self.num_speakers, N, L)                              
+        masks = masks.reshape(B, self.num_speakers, N, L)
 
         masks = masks.permute(0, 1, 3, 2)
         masks = self.ffw(masks)
@@ -219,10 +272,13 @@ class ProcessingBlock(nn.Module):
 
         return masks
 
+
 class Decoder(nn.Module):
     def __init__(self, in_size, kernel_size, stride):
         super().__init__()
-        self.conv = nn.ConvTranspose1d(in_channels=in_size, out_channels=1, kernel_size=kernel_size, stride=stride)
+        self.conv = nn.ConvTranspose1d(
+            in_channels=in_size, out_channels=1, kernel_size=kernel_size, stride=stride
+        )
 
     def forward(self, x):
         x = self.conv(x)
@@ -230,15 +286,36 @@ class Decoder(nn.Module):
 
 
 class SepFormer(nn.Module):
-    def __init__(self, n_filters, num_speakers, ff_dim, encoder_kernel_size, num_blocks, num_layers, num_heads, chunk_size, max_len, mask_ff_dim):
+    def __init__(
+        self,
+        n_filters,
+        num_speakers,
+        ff_dim,
+        encoder_kernel_size,
+        num_blocks,
+        num_layers,
+        num_heads,
+        chunk_size,
+        max_len,
+        mask_ff_dim,
+    ):
         super().__init__()
 
         self.stride = encoder_kernel_size // 2
         self.kernel_size = encoder_kernel_size
 
         self.encoder = Encoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
-        self.separation = ProcessingBlock(input_size=n_filters, ff_dim=ff_dim, num_layers=num_layers, 
-        num_blocks=num_blocks, num_heads=num_heads, chunk_size=chunk_size, num_speakers=num_speakers, max_len=max_len, mask_ff_dim=mask_ff_dim)
+        self.separation = ProcessingBlock(
+            input_size=n_filters,
+            ff_dim=ff_dim,
+            num_layers=num_layers,
+            num_blocks=num_blocks,
+            num_heads=num_heads,
+            chunk_size=chunk_size,
+            num_speakers=num_speakers,
+            max_len=max_len,
+            mask_ff_dim=mask_ff_dim,
+        )
         self.decoder = Decoder(n_filters, encoder_kernel_size, encoder_kernel_size // 2)
         self._init_weights()
 
@@ -250,11 +327,11 @@ class SepFormer(nn.Module):
                     nn.init.zeros_(module.bias)
 
     def forward(self, x):
-        
+
         length = x.shape[-1]
         pad = (self.stride - (length - self.kernel_size) % self.stride) % self.stride
         x = F.pad(x, (0, pad))
-        
+
         w = self.encoder(x)
         masks = self.separation(w)
         s = masks * w.unsqueeze(1)
