@@ -57,7 +57,6 @@ def main(config):
         metrics=metrics,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
-        text_encoder=None,
         config=config,
         device=device,
         dataloaders=dataloaders,
